@@ -7,3 +7,4 @@ scikit-learn      # 이상탐지 모델 (Isolation Forest 등)
 matplotlib        # 결과 시각화
 fastapi           # 보안관제 대시보드 백엔드 (Step 5)
 uvicorn[standard] # FastAPI 실행 서버 (Step 5)
+joblib            # 학습한 모델 저장/불러오기 (Step 7)

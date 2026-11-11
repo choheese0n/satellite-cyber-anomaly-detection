@@ -5,6 +5,11 @@ Step 5 — 보안관제 대시보드 (FastAPI)
 브라우저가 1초마다 서버에 "telemetry 한 건 더 줘"를 요청하면,
 서버가 새 샘플을 만들어 위협 점수를 매겨 돌려주고, 화면이 실시간으로 갱신됩니다.
 
+모델은 telemetry_lib.load_or_train() 으로 불러옵니다:
+    - models\\attack_model.joblib 이 있으면 즉시 로드(빠른 시작)
+    - 없으면 그 자리에서 학습 후 저장
+    (미리 만들려면: python src\\07_train_model.py)
+
 구성:
     GET  /            → 대시보드 HTML
     GET  /api/tick    → telemetry 1건 생성 + 점수화해서 JSON 반환
@@ -12,8 +17,7 @@ Step 5 — 보안관제 대시보드 (FastAPI)
 
 실행:
     python src\\05_dashboard.py
-    → 브라우저에서 http://127.0.0.1:8000 접속
-    (끄기: 터미널에서 Ctrl+C)
+    → 브라우저에서 http://127.0.0.1:8000 접속  (끄기: Ctrl+C)
 """
 
 from collections import deque
@@ -22,72 +26,17 @@ import numpy as np
 import pandas as pd
 from fastapi import FastAPI
 from fastapi.responses import HTMLResponse, JSONResponse
-from sklearn.ensemble import RandomForestClassifier
 import uvicorn
 
+from telemetry_lib import (
+    FEATURES, ATTACK_TYPES, make_one, threat_level, threat_score, load_or_train,
+)
+
+ATTACK_PROB = 0.15
 rng = np.random.default_rng(7)
 
-FEATURES = [
-    "battery_voltage", "command_rate", "signal_strength",
-    "temperature", "uplink_latency_ms", "packet_error_rate",
-]
-SEVERITY = {
-    "normal": 0.0, "spoofing": 0.7, "command_injection": 1.0,
-    "telemetry_manipulation": 0.9, "sensor_anomaly": 0.5,
-}
-COUNTS = {
-    "normal": 1200, "spoofing": 180, "command_injection": 180,
-    "telemetry_manipulation": 180, "sensor_anomaly": 180,
-}
-ATTACK_PROB = 0.15
-
-
-def make_one(label: str) -> dict:
-    g = rng.normal
-    table = {
-        "normal":  dict(battery_voltage=g(7.4,.05), command_rate=g(5.0,.8),
-                        signal_strength=g(95,1.5), temperature=g(30,1.0),
-                        uplink_latency_ms=g(40,5), packet_error_rate=g(.5,.2)),
-        "spoofing": dict(battery_voltage=g(7.4,.06), command_rate=g(5.5,1.0),
-                         signal_strength=g(70,8), temperature=g(30,1.2),
-                         uplink_latency_ms=g(120,25), packet_error_rate=g(6.0,1.5)),
-        "command_injection": dict(battery_voltage=g(7.4,.06), command_rate=g(30,5),
-                                  signal_strength=g(94,2.0), temperature=g(31,1.5),
-                                  uplink_latency_ms=g(45,6), packet_error_rate=g(1.0,.4)),
-        "telemetry_manipulation": dict(battery_voltage=g(6.6,.15), command_rate=g(5.0,.9),
-                                       signal_strength=g(95,1.6), temperature=g(40,1.5),
-                                       uplink_latency_ms=g(42,5), packet_error_rate=g(.6,.2)),
-        "sensor_anomaly": dict(battery_voltage=g(7.4,.07), command_rate=g(5.0,.9),
-                               signal_strength=g(94,2.0), temperature=g(30,12.0),
-                               uplink_latency_ms=g(43,6), packet_error_rate=g(.7,.3)),
-    }
-    row = table[label]
-    row["packet_error_rate"] = max(0.0, row["packet_error_rate"])
-    row["label"] = label
-    return row
-
-
-def make_batch(label: str, n: int) -> pd.DataFrame:
-    return pd.DataFrame([make_one(label) for _ in range(n)])
-
-
-def threat_level(score: float) -> str:
-    if score >= 80:
-        return "CRITICAL"
-    if score >= 50:
-        return "HIGH"
-    if score >= 20:
-        return "MEDIUM"
-    return "LOW"
-
-
-# ---- 서버 시작 시 1회: 모델 학습 ----
-print("[준비] 분류기를 학습합니다...")
-_train = pd.concat([make_batch(l, n) for l, n in COUNTS.items()], ignore_index=True)
-MODEL = RandomForestClassifier(n_estimators=300, random_state=1, n_jobs=-1)
-MODEL.fit(_train[FEATURES], _train["label"])
-CLASSES = list(MODEL.classes_)
-WEIGHTS = np.array([SEVERITY[c] for c in CLASSES])
+# ---- 서버 시작 시: 저장된 모델 로드(없으면 학습) ----
+BUNDLE = load_or_train()
 print("[준비] 완료. http://127.0.0.1:8000 에서 접속하세요.")
 
 # ---- 누적 상태 ----
@@ -99,14 +48,10 @@ app = FastAPI(title="Satellite Security Monitor")
 
 @app.get("/api/tick")
 def tick():
-    lbl = "normal" if rng.random() > ATTACK_PROB else rng.choice(
-        ["spoofing", "command_injection", "telemetry_manipulation", "sensor_anomaly"]
-    )
-    row = make_one(lbl)
-    x = pd.DataFrame([row])[FEATURES]
-    proba = MODEL.predict_proba(x)[0]
-    score = round(float(proba @ WEIGHTS) * 100, 1)
-    pred = str(MODEL.predict(x)[0])
+    lbl = "normal" if rng.random() > ATTACK_PROB else rng.choice(ATTACK_TYPES)
+    x = pd.DataFrame([make_one(lbl, rng)])[FEATURES]
+    score = round(float(threat_score(BUNDLE, x)[0]), 1)
+    pred = str(BUNDLE["model"].predict(x)[0])
     level = threat_level(score)
 
     STATE["tick"] += 1
@@ -116,13 +61,8 @@ def tick():
     if level in ("HIGH", "CRITICAL"):
         STATE["high"] += 1
 
-    item = {
-        "t": STATE["tick"],
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "score": score,
-        "level": level,
-        "pred_type": pred,
-    }
+    item = {"t": STATE["tick"], "time": datetime.now().strftime("%H:%M:%S"),
+            "score": score, "level": level, "pred_type": pred}
     RECENT.appendleft(item)
     return JSONResponse(item)
 

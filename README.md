@@ -74,9 +74,11 @@ python src\02_classify_attacks.py     # Step 2: 공격 유형 분류
 python src\03_threat_score.py         # Step 3: 위협 점수
 python src\04_realtime_monitor.py     # Step 4: 실시간 스트림 탐지
 python src\05_dashboard.py            # Step 5: 대시보드 (→ http://127.0.0.1:8000)
+python src\06_nasa_real_data.py A-1   # Step 6(옵션): 실제 NASA 데이터 검증
 ```
 
 > 대시보드는 브라우저에서 `http://127.0.0.1:8000` 접속, 끄기는 터미널에서 `Ctrl+C`.
+> Step 6은 실제 NASA 데이터 다운로드가 필요합니다(아래 §4 참고).
 
 ---
 
@@ -123,7 +125,53 @@ GET /api/stats   누적 통계
 
 ---
 
-## 🔬 4. 모델 선택: Isolation Forest vs RandomForest
+## 🛰️ 4. 실제 NASA 위성 데이터 검증 (Step 6, 옵션)
+
+합성 데이터만으로는 부족해서, 실제 우주선 텔레메트리로 검증했습니다.
+**NASA SMAP/MSL** telemetry (telemanom, Hundman et al., KDD 2018) — `train`은 정상 구간만,
+`test`는 이상 포함, `labeled_anomalies.csv`에 실제 이상 구간이 라벨로 있습니다.
+
+### 📥 데이터 준비 (채널 1개만, HuggingFace 미러)
+```powershell
+mkdir data\nasa\train, data\nasa\test -Force
+$base="https://huggingface.co/datasets/appleparan/telemanom/resolve/main"
+Invoke-WebRequest "$base/labeled_anomalies.csv" -OutFile "data\nasa\labeled_anomalies.csv"
+Invoke-WebRequest "$base/data/data/train/A-1.npy" -OutFile "data\nasa\train\A-1.npy"
+Invoke-WebRequest "$base/data/data/test/A-1.npy"  -OutFile "data\nasa\test\A-1.npy"
+python src\06_nasa_real_data.py A-1
+```
+
+### 💡 여기서 배운 것 (실무 통찰)
+처음엔 Step 1처럼 **Isolation Forest**를 썼지만 **완전히 실패**했습니다.
+원인: 실제 A-1 채널은 `train`(정상)이 **거의 상수**(std≈0)라서, Isolation Forest가
+분할을 만들지 못하고 **모든 점에 똑같은 점수**를 줘 버렸습니다(무력화). 합성 데이터와 다른 지점.
+
+→ 데이터 특성에 맞게 **residual 기반 탐지**로 전환:
+
+```txt
+anomaly_score = |값 − 정상평균| + 국소변동성(rolling std)
+판정 = anomaly_score > (중앙값 + K·scale)   # 강건 임계값, telemanom 논문 아이디어 단순화
+```
+
+### 📊 결과 (채널 A-1)
+| 지표 | 값 |
+|---|---|
+| **구간 탐지** (핵심) | **1 / 1 구간 탐지 성공** |
+| 포인트 precision | 0.500 |
+| 포인트 recall | 0.294 |
+| 포인트 F1 | 0.370 |
+
+> 포인트 재현율이 낮은 건 85점 이상 구간 중 급변 지점만 잡혀서이며, point 이상 탐지에선
+> **구간 단위 탐지 성공**이 표준 평가 지표입니다.
+
+![nasa a-1](outputs/nasa_A-1_detection.png)
+
+**핵심 교훈:** 합성 데이터에서 통하던 모델이 실제 데이터에선 깨질 수 있다. 모델을 바꾸기 전에
+**데이터를 먼저 진단**하는 것이 이상탐지의 실전 역량입니다.
+
+---
+
+## 🔬 5. 모델 선택: Isolation Forest vs RandomForest
 
 이 프로젝트는 **일부러 두 접근을 모두** 씁니다. 상황이 다르기 때문입니다.
 
@@ -141,7 +189,7 @@ Isolation Forest로 **처음 보는 이상**을 넓게 거르고(1차), RandomFo
 
 ---
 
-## 🗂️ 5. 폴더 구조
+## 🗂️ 6. 폴더 구조
 
 ```txt
 satellite-cyber-anomaly-detection/
@@ -149,18 +197,19 @@ satellite-cyber-anomaly-detection/
 ├── requirements.txt
 ├── .gitignore
 ├── src/
-│   ├── 01_detect_anomalies.py    # Step 1
-│   ├── 02_classify_attacks.py    # Step 2
-│   ├── 03_threat_score.py        # Step 3
-│   ├── 04_realtime_monitor.py    # Step 4
-│   └── 05_dashboard.py           # Step 5
+│   ├── 01_detect_anomalies.py    # Step 1: 비지도 이상탐지
+│   ├── 02_classify_attacks.py    # Step 2: 공격 유형 분류
+│   ├── 03_threat_score.py        # Step 3: 위협 점수
+│   ├── 04_realtime_monitor.py    # Step 4: 실시간 탐지
+│   ├── 05_dashboard.py           # Step 5: 대시보드
+│   └── 06_nasa_real_data.py      # Step 6: 실제 NASA 데이터 검증
 ├── outputs/                      # 결과 그래프(PNG)
-└── data/                         # 생성 데이터 (git 제외)
+└── data/                         # 생성·다운로드 데이터 (git 제외)
 ```
 
 ---
 
-## 🧱 6. 로드맵 (완료)
+## 🧱 7. 로드맵 (완료)
 
 | 단계 | 할 일 | 핵심 | 상태 |
 |---|---|---|---|
@@ -169,3 +218,4 @@ satellite-cyber-anomaly-detection/
 | Step 3 | Threat Score 설계 | 리스크 스코어링 | ✅ |
 | Step 4 | 실시간 스트림 탐지 + 경보 | 실시간 처리 | ✅ |
 | Step 5 | 보안관제 대시보드 | FastAPI 백엔드/시각화 | ✅ |
+| Step 6 | 실제 NASA 데이터 검증 | residual 탐지·모델 진단 | ✅ |

@@ -8,11 +8,17 @@ Step 2~5가 각자 복붙하던 데이터 생성·모델 로직을 한 곳에 �
     from telemetry_lib import load_or_train, make_one, threat_level, ...
 """
 
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import joblib
 from sklearn.ensemble import RandomForestClassifier
+
+try:  # 콘솔/리다이렉트에서 한글·기호 출력 깨짐 방지 (cp949 → utf-8)
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path(__file__).resolve().parent.parent
 MODEL_PATH = BASE / "models" / "attack_model.joblib"

@@ -20,11 +20,17 @@ Step 3는 그 결과를 '얼마나 위험한가'를 나타내는 0~100 위협 �
     python src\\03_threat_score.py
 """
 
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
+
+try:  # 콘솔/리다이렉트 한글 출력 안전장치 (cp949 → utf-8)
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "data"

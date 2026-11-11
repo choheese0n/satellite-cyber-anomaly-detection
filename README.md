@@ -61,10 +61,11 @@ pip install -r requirements.txt
 | `scikit-learn` | 이상탐지·분류 모델 |
 | `matplotlib` | 결과 시각화 |
 | `fastapi`, `uvicorn` | 보안관제 대시보드 (Step 5) |
+| `joblib` | 학습한 모델 저장/불러오기 (Step 7) |
 
 ---
 
-## 🚀 2. 실행 방법 (Step 1~5)
+## 🚀 2. 실행 방법 (Step 1~7)
 
 `(.venv)` 가 켜진 상태에서 순서대로 실행합니다.
 
@@ -73,6 +74,7 @@ python src\01_detect_anomalies.py     # Step 1: 비지도 이상탐지
 python src\02_classify_attacks.py     # Step 2: 공격 유형 분류
 python src\03_threat_score.py         # Step 3: 위협 점수
 python src\04_realtime_monitor.py     # Step 4: 실시간 스트림 탐지
+python src\07_train_model.py          # Step 7: 모델 학습 후 저장(선택, 대시보드 가속)
 python src\05_dashboard.py            # Step 5: 대시보드 (→ http://127.0.0.1:8000)
 python src\06_nasa_real_data.py A-1   # Step 6(옵션): 실제 NASA 데이터 검증
 ```
@@ -122,6 +124,11 @@ GET /            대시보드 HTML
 GET /api/tick    telemetry 1건 생성 + 점수화
 GET /api/stats   누적 통계
 ```
+
+### ✅ Step 7 — 모델 저장/불러오기 (joblib)
+Step 2~5가 각자 복붙하던 데이터 생성·모델 로직을 `telemetry_lib.py` **공통 모듈**로 정리했습니다.
+`07_train_model.py`로 RandomForest를 한 번 학습해 `models\attack_model.joblib`로 저장해두면,
+대시보드는 **매번 재학습 없이 즉시 불러써서** 시작이 빨라집니다 (5-fold 교차검증 정확도 **0.98**).
 
 ---
 
@@ -202,8 +209,11 @@ satellite-cyber-anomaly-detection/
 │   ├── 03_threat_score.py        # Step 3: 위협 점수
 │   ├── 04_realtime_monitor.py    # Step 4: 실시간 탐지
 │   ├── 05_dashboard.py           # Step 5: 대시보드
-│   └── 06_nasa_real_data.py      # Step 6: 실제 NASA 데이터 검증
+│   ├── 06_nasa_real_data.py      # Step 6: 실제 NASA 데이터 검증
+│   ├── 07_train_model.py         # Step 7: 모델 학습·저장
+│   └── telemetry_lib.py          # 공통 라이브러리(데이터 생성·모델 저장/로드)
 ├── outputs/                      # 결과 그래프(PNG)
+├── models/                       # 저장된 모델 .joblib (git 제외, 재생성 가능)
 └── data/                         # 생성·다운로드 데이터 (git 제외)
 ```
 
@@ -219,3 +229,4 @@ satellite-cyber-anomaly-detection/
 | Step 4 | 실시간 스트림 탐지 + 경보 | 실시간 처리 | ✅ |
 | Step 5 | 보안관제 대시보드 | FastAPI 백엔드/시각화 | ✅ |
 | Step 6 | 실제 NASA 데이터 검증 | residual 탐지·모델 진단 | ✅ |
+| Step 7 | 모델 저장/불러오기(joblib) | 재사용·대시보드 가속 | ✅ |

@@ -42,12 +42,17 @@ PowerShell에서 (예: 채널 A-1):
 (data\\ 는 .gitignore 대상이라 깃에 올라가지 않습니다.)
 """
 
-from pathlib import Path
 import sys
+from pathlib import Path
 import ast
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+
+try:  # 콘솔/리다이렉트 한글 출력 안전장치 (cp949 → utf-8)
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path(__file__).resolve().parent.parent
 NASA_DIR = BASE / "data" / "nasa"
@@ -107,8 +112,14 @@ def main() -> None:
     row = row.iloc[0]
 
     print(f"[1/4] 채널 '{chan}' 데이터를 불러옵니다...")
-    train_arr = np.load(train_dir / f"{chan}.npy")
-    test_arr = np.load(test_dir / f"{chan}.npy")
+    tr_path, te_path = train_dir / f"{chan}.npy", test_dir / f"{chan}.npy"
+    if not (tr_path.is_file() and te_path.is_file()):
+        print(f"❗ 채널 '{chan}' 의 .npy 파일이 없습니다 ({tr_path.name}, {te_path.name}).")
+        print("   상단 주석의 다운로드 명령으로 그 채널의 train/test .npy를 받으세요.")
+        print("   (기본 예시는 A-1 입니다: python src\\06_nasa_real_data.py A-1)")
+        sys.exit(0)
+    train_arr = np.load(tr_path)
+    test_arr = np.load(te_path)
     train_val = train_arr[:, 0] if train_arr.ndim > 1 else train_arr  # 열0 = 텔레메트리 값
     test_val = test_arr[:, 0] if test_arr.ndim > 1 else test_arr
     print(f"    train(정상) {len(train_val)}점 / test {len(test_val)}점")

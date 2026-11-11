@@ -8,11 +8,17 @@ Step 1 — 위성 Telemetry 사이버 공격 이상탐지
     python src\\01_detect_anomalies.py
 """
 
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from sklearn.ensemble import IsolationForest
+
+try:  # 콘솔/리다이렉트 한글 출력 안전장치 (cp949 → utf-8)
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "data"

@@ -16,6 +16,7 @@ RandomForest 분류기로 학습 → 평가(리포트 + 혼동행렬) → 중요
     python src\\02_classify_attacks.py
 """
 
+import sys
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -23,6 +24,11 @@ import matplotlib.pyplot as plt
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report, confusion_matrix
+
+try:  # 콘솔/리다이렉트 한글 출력 안전장치 (cp949 → utf-8)
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "data"

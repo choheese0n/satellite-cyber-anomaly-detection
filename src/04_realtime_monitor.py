@@ -17,6 +17,7 @@ Step 4는 telemetry가 '한 건씩' 들어올 때마다 즉시 판정하고 경�
     python src\\04_realtime_monitor.py
 """
 
+import sys
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import deque
@@ -24,6 +25,11 @@ import time
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
+
+try:  # 콘솔/리다이렉트 한글 출력 안전장치 (cp949 → utf-8)
+    sys.stdout.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 BASE = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE / "data"

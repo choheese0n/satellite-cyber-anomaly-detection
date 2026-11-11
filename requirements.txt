@@ -1,0 +1,7 @@
+# Satellite Cyber Anomaly Detection - 라이브러리
+# 설치: pip install -r requirements.txt
+
+numpy             # 수치 계산 / 데이터 생성
+pandas            # 표/데이터 처리
+scikit-learn      # 이상탐지 모델 (Isolation Forest 등)
+matplotlib        # 결과 시각화
